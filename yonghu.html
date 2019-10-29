@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="js/blackboard.js"></script>
+</head>
+<body>
+<div id="baiban">
+    <input type="text" id="roomId">
+    <input type="button" id="btn" value="进入该房间">
+</div>
+<script src="js/socket.js"></script>
+<script>
+    let d=new Draw('baiban','http://localhost:7001/')
+    document.getElementById('btn').onclick=function(){
+        d.inRoom(document.getElementById('roomId').value)
+    }
+
+</script>
+</body>
+</html>

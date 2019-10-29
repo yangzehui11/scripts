@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+
+    <script src="js/blackboard.js"></script>
+</head>
+<body>
+    <div id="baiban">
+        <input type="text" id="roomId">
+        <button id="btn">进入房间</button>
+    </div>
+<script src="js/socket.js"></script>
+<script>
+    let d=new Draw('baiban','http://localhost:7001')
+    document.getElementById('btn').onclick=function(){
+        d.createRoom(document.getElementById('roomId').value)
+    }
+    /*window.onload=function(){
+        if(document.getElementById('roomId').value.isPrototypeOf(String)){
+            d.createRoom(document.getElementById('roomId').value)
+        }
+    }*/
+</script>
+</body>
+</html>
