@@ -3,9 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
+    <script src="js/blackboard.js"></script>
 </head>
 <body>
-<div value="12121212111" style="float: left;"></div>
+<div id="baiban">
+</div>
+<input id="a" type="button">
+<script src="js/socket.js"></script>
+<script>
+    let d=new Draw()
+    d.playback(8,'http://localhost:7001','baiban')
+    document.getElementById('a').onclick=function () {
+        d.stop()
+    }
 
+</script>
 </body>
 </html>

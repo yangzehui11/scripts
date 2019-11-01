@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>观众</title>
     <script src="js/blackboard.js"></script>
 </head>
 <body>
@@ -12,7 +12,7 @@
 </div>
 <script src="js/socket.js"></script>
 <script>
-    let d=new Draw('baiban','http://localhost:7001/')
+    let d=new Draw('baiban','http://localhost:7001')
     document.getElementById('btn').onclick=function(){
         d.inRoom(document.getElementById('roomId').value)
     }

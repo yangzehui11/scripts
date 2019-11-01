@@ -13,9 +13,9 @@
     </div>
 <script src="js/socket.js"></script>
 <script>
-    let d=new Draw('baiban','http://localhost:7001')
+    let d=new Draw()
     document.getElementById('btn').onclick=function(){
-        d.createRoom(document.getElementById('roomId').value)
+        d.createRoom(document.getElementById('roomId').value,'http://localhost:7001','baiban')
     }
     /*window.onload=function(){
         if(document.getElementById('roomId').value.isPrototypeOf(String)){

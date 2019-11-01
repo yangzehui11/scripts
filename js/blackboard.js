@@ -1,8 +1,6 @@
 
 class Draw {
-    constructor(el,server) {
-        this.el=el
-        this.server=server
+    constructor() {
         this.div=document.getElementById(this.el)
         this.canvas
         this.live={'qie':[],'scenes':[]};//直播的所有数据，包括场景，切换，图片，总时长
@@ -13,16 +11,16 @@ class Draw {
         //this.scenes['imgs']=[]//所有ppt
         this.startTime=null;//直播的开始时间
         this.operate='line';//进行的是什么操作，line是画线，rubber是擦除，后续还有text敲汉字
-        this.yonghuState
-        this.huifangStartTime
         this.arr=[]//回放功能的定时器存放在
         this.roomId;
         this.classFlag=false;
+        this.huifangInterval;//回放时控制场景的定时器
     }
     //创建房间
-    createRoom(roomId){
+    createRoom(roomId,server,el){
+        this.div=document.getElementById(el)
             this.roomId=roomId
-            this.ws= io(this.server, {
+            this.ws= io(server+'/live', {
                 query: {
                     uuid: this.roomId,
                     role:`zhubo`,
@@ -43,6 +41,8 @@ class Draw {
     readyZhubo(){
         //清空div
         this.div.innerHTML=''
+        //开始计时
+        this.startTime=new Date().getTime()
 
         let div1 = document.createElement('div');//创建一个标签
         let canvas = document.createElement('canvas');//创建一个标签
@@ -53,11 +53,6 @@ class Draw {
 
         let div2 = document.createElement('div');//创建一个标签
             //开始/结束，橡皮擦，画笔，颜色添加到div2中
-
-        let startBtn = document.createElement('input');
-        startBtn.setAttribute('type', 'button');
-        startBtn.setAttribute('value', '上课');
-
         let rubberBtn = document.createElement('input');
         rubberBtn.setAttribute('type', 'button');
         rubberBtn.setAttribute('value', '橡皮擦');
@@ -83,7 +78,6 @@ class Draw {
 
         div2.appendChild(upPPT);
         div2.appendChild(pullppt);
-        div2.appendChild(startBtn);
         div2.appendChild(rubberBtn);
         div2.appendChild(lineBtn);
         div2.appendChild(colorBtn);
@@ -100,7 +94,6 @@ class Draw {
         this.stage_info = this.canvas.getBoundingClientRect()
 
         pullppt.onchange= () => {
-            if(this.live.classFlag==false){
                 let picture = pullppt.files;
                 let formData = new FormData();
                 formData.append('file', picture[0]);
@@ -110,52 +103,42 @@ class Draw {
                 }).then(response =>response.json()).then(data => {
                     if(data!=null){
                         div3.innerHTML=''
+                        //是第几张ppt
+                        let x=this.live.scenes.length
                         for (let i = 0; i < data.arr.length; i++) {
                             let img = document.createElement('img');//创建一个标签
                             img.setAttribute('width','80px')
                             img.setAttribute('height','60px')
                             img.setAttribute('src',data.arr[i])
-                            img.setAttribute('id',i)
+                            img.setAttribute('id',x)
                             img.onclick=()=>{
-                                img.style.border='red'
-                                this.qiePPT(i)
+                                //img.style.border='red'
+                                this.qiePPT(img.getAttribute('id'))
                             }
                             div3.appendChild(img)
+                            this.live.scenes.push({'id':x,'ppt':data.arr[i],'content':[],'screenSize':[canvas.width,canvas.height]})
+                        ++x;
                         }
+                        this.currentPPt=x-data.arr.length
                         this.div.appendChild(div3)
                         this.live['imgs']=data.arr
-                        //大屏显示ppt
-                        let img=this.live['imgs'][this.currentPPt]
-                        this.canvas.style.backgroundImage='url('+img+')'
-                        this.canvas.style.backgroundSize='cover'
+                        //开始计时
+                        this.startTime=new Date().getTime()
+                        this.qiePPT(this.currentPPt)
                     }
                 }).catch(function(e){
                     alert('error:' + e);
                 })
-            }else {
-                alert('上课状态不能换ppt')
-            }
-
-
         }
 
         upPPT.onclick= () => {
-            if(this.currentPPt>0)
-            this.qiePPT(this.currentPPt-1)
+            if(this.currentPPt>0){
+                this.qiePPT(this.currentPPt-1)
+            }
         }
         downPPT.onclick= () => {
-            if(this.currentPPt<this.live['imgs'].length-1)
+            if(this.currentPPt<this.live['scenes'].length-1){
                 this.qiePPT(this.currentPPt+1)
-        }
-        startBtn.onclick= () => {
-            if(startBtn.value=='上课'){
-                this.live['classFlag']=true
-                this.startScene()
-                startBtn.value='下课'
-            }else if(startBtn.value=='下课'){
-                this.live['classFlag']=false
-                this.liveEnd()
-                startBtn.value='上课'
             }
         }
         rubberBtn.onclick= () => {
@@ -171,10 +154,7 @@ class Draw {
         }
         load()
         window.onbeforeunload=()=> {
-            //如果是上课中状态，则保存。下课状态不进行操作
-            if(this.live['classFlag']==true){
-                this.liveEnd();
-            }
+            this.liveSave()
         }
 
         this.ws.emit('ready',{uuid:this.roomId,roomToken:'token111',role:'zhubo'})
@@ -182,22 +162,21 @@ class Draw {
             this.live=data
             this.startTime=new Date().getTime()-this.live.time
             //下面小图片
+            let x=this.live.scenes.length-this.live.imgs.length
             for (let i = 0; i < this.live.imgs.length; i++) {
                 let img = document.createElement('img');//创建一个标签
                 img.setAttribute('width','80px')
                 img.setAttribute('height','60px')
                 img.setAttribute('src',this.live.imgs[i])
-                img.setAttribute('id',i)
+                img.setAttribute('id',x)
                 img.onclick=()=>{
                     //img.style.border='red'
-                    this.qiePPT(i)
+                    this.qiePPT(img.getAttribute('id'))
                 }
                 div3.appendChild(img)
+                ++x
             }
             this.div.appendChild(div3)
-            //如果是正在上课中的状态
-            if(this.live.classFlag==true){
-                startBtn.value='下课'
                 //此时不应该用大图片做背景，而是显示该场景
                 let qieOne=this.live.qie.pop()
                 let currentPPT
@@ -210,7 +189,6 @@ class Draw {
                     this.live.qie.push(qieOne)
                 }
                 this.qiePPT(currentPPT)
-            }
         })
 
         window.onresize=load
@@ -225,23 +203,13 @@ class Draw {
             div3.style.overflow='auto'
         }
     }
-    startScene(){
-        /*this.ctx.height=this.canvas.height
-        this.ctx.width=this.canvas.width*/
-        //this.live['scenes']=[]
-        for (let i = 1; i <=this.live.imgs.length ; i++) {
-            this.live.scenes.push({'id':i,'ppt':'','content':[],'screenSize':[this.ctx.width,this.ctx.height]})
-        }
-        //this.ws.e('start:'+ppt)//ppt:总的ppt数量
-        this.startTime=new Date().getTime()
-        this.qiePPT(this.currentPPt)
-    }
 
 
     //用户进入直播间
-    inRoom(roomId){
+    inRoom(roomId,server,el){
+        this.div=document.getElementById(el)
             this.roomId=roomId
-            this.ws= io(this.server, {
+            this.ws= io(server+'/live', {
                 query: {
                     uuid: this.roomId,
                     role:`yonghu`,
@@ -291,8 +259,8 @@ class Draw {
             this.sceneOne=data
             this.init()
         })
-        this.ws.on('liveEnd',(data)=> {
-            alert('下课')
+        this.ws.on('liveSave',(data)=> {
+            //alert('下课')
         })
 
         /*window.onbeforeunload=()=>{
@@ -303,13 +271,198 @@ class Draw {
         window.onresize=load
         window.onload=load
         function load () {
-            let h=document.documentElement.clientHeight*0.9
-            canvas.style.width=parseInt(h*(4/3))+'px';
-            canvas.style.height=parseInt(h)+'px';
+            let h=document.documentElement.clientHeight
+            let w=document.documentElement.clientWidth
+            if(h<=w){
+                canvas.style.width=parseInt(h*(4/3))+'px';
+                canvas.style.height=parseInt(h)+'px';
+            }else if(h>w){
+                canvas.style.width=parseInt(w)+'px';
+                canvas.style.height=parseInt(w*(3/4))+'px';
+            }
+        }
+    }
+
+    //回放
+    playback(playbackId,server,el) {// 画板的id,从多少秒开始播放
+        this.div=document.getElementById(el)
+        this.ws= io(server+'/playback');
+
+        //清空div
+        this.div.innerHTML=''
+        //画板添加到div中
+        let div1 = document.createElement('div');//创建一个标签
+        let canvas = document.createElement('canvas');
+        canvas.setAttribute('width', 4000);
+        canvas.setAttribute('height', 3000);
+        div1.appendChild(canvas);
+        this.div.appendChild(div1);//把创建的节点frameDiv 添加到父类body 中；
+        this.canvas=canvas
+        this.ctx = this.canvas.getContext('2d')
+        this.ctx.strokeStyle='red'
+        this.ctx.lineJoin='round';//圆
+        this.ctx.lineCap = 'round';
+
+        this.ws.emit('ready',playbackId)
+        this.ws.on('ready',(data)=> {
+            if(data===false){
+                alert('该课程没有回放')
+            }else if(data!=null){
+                this.live=data
+                qieScene(this.live,0,this.canvas,this.ctx,this.huifangInterval)
+            }
+        })
+        //场景切换
+        function qieScene(live,ctime,canvas,ctx,huifangInterval) {
+            let huifangStartTime=new Date().getTime()-ctime
+            let newQie = []//存放可以发送给观众的场景
+            let flag=false//判断是否往newQie中push了
+            //let arr=[] //存放场景播放方法里的定时器
+            clearInterval(huifangInterval)
+            huifangInterval=setInterval(()=> {
+                let currentTime=new Date().getTime()-huifangStartTime
+                //let flag=false//监视是否往newQie中push
+                for (let i = newQie.length; i <live['qie'].length ; i++) {
+                    if(live.qie[i]['time']<currentTime&&i>=newQie.length){
+                        newQie.push(live.qie[i])
+                        flag=true
+                    }
+                    if(live.qie[i]['time']>=currentTime){
+                        break;//如果录制时间大于当前时间。其后面的也必要执行了
+                    }
+                }
+                if(newQie.length==live.qie.length){
+                    clearInterval(huifangInterval)
+                    return
+                }
+                //发送的是newQie数组中时间最大的场景,也就是最后一个
+                if(flag){
+                    let lastScene = newQie[newQie.length-1]
+                    let ppt = lastScene['ppt']
+                        //找出了当前时间的场景并给播放方法
+                        playScene(live.scenes[ppt],canvas,ctx,huifangStartTime)
+                    flag=false
+                }
+
+            },1000)
+        }
+        let arr=[]
+        //场景播放
+        function playScene(scene,canvas,ctx,huifangStartTime) {
+            //清理定时器
+            for (let i = 0; i < arr.length; i++) {
+                console.log(arr)
+                clearTimeout(arr[i])
+            }
+            //清屏
+            ctx.clearRect(0, 0, 10000, 10000)
+
+            let currentTime = new Date().getTime() - huifangStartTime
+            canvas.style.backgroundImage = 'url("' + scene.ppt + '")'
+            canvas.style.backgroundSize = 'cover'
+
+            let ding;
+            for (let i = 0; i < scene['content'].length; i++) {
+                let c = scene['content'][i].split(',')
+                //要比较的时间
+                let flagTime
+                if(c[0].split(':')[0] == 'line'){
+                    flagTime=(parseInt(c[3].split('/')[2]) - currentTime)
+                }else if(c[0].split(':')[0] == 'rubber'){
+                    flagTime=(parseInt(c[1]) - currentTime)
+                }
+                if (flagTime <= 0) {
+                    ff(c,ctx)
+                } else if (flagTime > 0) {
+                    arr[i] = setTimeout(//某一场景的定时器
+                        function (ctx, sceneOne, ding) {
+                            clearInterval(ding)
+                            let pop = sceneOne['content'][i]
+                            let c = pop.split(',')//一步操作的数据
+                            let operate = c.shift()
+                            if (operate.split(':')[0] == 'line') {//如果该操作是line
+                                console.log('经过了line')
+                                ctx.strokeStyle = operate.split(':')[1]
+                                ctx.lineWidth = operate.split(':')[2]
+                                //控制画第几个点
+                                let i=2
+                                //获取第三个点的时间
+                                let time=c[2].split('/')[2]
+                                ding=setInterval(function (c,ctx) {//某一笔的定时器
+                                    let ci2 = c[i-2].split('/')
+                                    let ci1 = c[i-1].split('/')
+                                    let ci = c[i].split('/')
+                                    if(time>=parseInt(ci[2])){
+                                        ctx.beginPath();
+                                        ctx.moveTo((parseInt(ci2[0]) + parseInt(ci1[0])) / 2, (parseInt(ci2[1]) + parseInt(ci1[1])) / 2);
+                                        ctx.quadraticCurveTo(parseInt(ci1[0]), parseInt(ci1[1]), (parseInt(ci1[0]) + parseInt(ci[0])) / 2, (parseInt(ci1[1]) + parseInt(ci[1])) / 2);
+                                        ctx.stroke();
+                                        ctx.closePath();
+                                        ++i
+                                    }
+                                    if(i>=c.length){
+                                        //清理定时器
+                                        //console.log('清理了定时器')
+                                        clearInterval(ding)
+                                    }
+                                    time=time+10
+                                },10,c,ctx)
+                            } else if (operate.split(':')[0] == 'rubber') {
+                                console.log('经过了橡皮擦：'+c)
+                                ctx.clearRect(parseInt(c[1]), parseInt(c[2]), parseInt(c[3]),parseInt(c[4]))
+                            }
+                        }, flagTime, ctx, scene, ding)
+                }
+            }
+        }
+        function ff(cc,ctx){
+            if (cc[0].split(':')[0] == 'line') {//如果该操作是line
+                ctx.strokeStyle = cc[0].split(':')[1]
+                ctx.lineWidth = cc[0].split(':')[2]
+                //画线
+                for (let j = 3; j <cc.length ; j++) {
+                    let beginPoint=cc[j-2]
+                    let controlPoint=cc[j-1]
+                    let endPoint=cc[j]
+                    //画曲线
+                    let b = beginPoint.split('/')
+                    let c = controlPoint.split('/')
+                    let e = endPoint.split('/')
+                    ctx.beginPath();
+                    ctx.moveTo((parseInt(b[0]) + parseInt(c[0])) / 2, (parseInt(b[1]) + parseInt(c[1])) / 2);
+                    ctx.quadraticCurveTo(parseInt(c[0]), parseInt(c[1]), (parseInt(c[0]) + parseInt(e[0])) / 2, (parseInt(c[1]) + parseInt(e[1])) / 2);
+                    ctx.stroke();
+                    ctx.closePath();
+
+                }
+            } else if (cc[0].split(':')[0] == 'rubber') {
+                ctx.clearRect(cc[2],cc[3],cc[4],cc[5])
+            }
+        }
+
+        load()
+        window.onresize=load
+        window.onload=load
+        function load () {
+            let h=document.documentElement.clientHeight
+            let w=document.documentElement.clientWidth
+            if(h<=w){
+                canvas.style.width=parseInt(h*(4/3))+'px';
+                canvas.style.height=parseInt(h)+'px';
+            }else if(h>w){
+                canvas.style.width=parseInt(w)+'px';
+                canvas.style.height=parseInt(w*(3/4))+'px';
+            }
 
         }
     }
 
+    //回放时暂停
+    stop(){
+        console.log('停止1')
+        clearInterval(this.huifangInterval)
+        console.log('停止1')
+    }
     line(lineSize) {
 
         this.operate = 'line'
@@ -443,16 +596,7 @@ class Draw {
                 startY = parseInt((event.clientY - this.stage_info.top) * bili)
             }
         }
-        /*//鼠标移动时
-        this.canvas.onmousemove = () => {
-            if(this.operate=='rubber'){
-                console.log('鼠标移动')
-                window.getSelection() ? window.getSelection().removeAllRanges() : document.selection.empty()
-                endX = parseInt((event.clientX - this.stage_info.left) * bili)
-                endY = parseInt((event.clientY - this.stage_info.top) * bili)
 
-            }
-        }*/
         this.canvas.onmouseup = () => {
             if (this.operate=='rubber'){
                 endX = parseInt((event.clientX - this.stage_info.left) * bili)
@@ -464,12 +608,9 @@ class Draw {
                     this.ctx.clearRect(startX,startY,sizeX,sizeY)
                     let time = new Date().getTime() - this.startTime
                     this.live.scenes[this.currentPPt]['content'].push(this.operate+':'+','+time+','+startX+','+startY+','+sizeX+','+sizeY)
-                    console.log('rubber:'+this.live.scenes[this.currentPPt]['content'])
                     let scene1 = {'scene':this.live.scenes[this.currentPPt],'uuid':this.roomId,'role':'zhubo'}
                     this.ws.emit('liveClass',scene1)
-                }/*else if(){
-
-                }*/
+                }
             }
         }
     }
@@ -481,8 +622,8 @@ class Draw {
     qiePPT(xScene/*切到第几个场景*/) {
         this.currentPPt=xScene
         //this.ctx.clearRect(0, 0, 10000, 10000)
-        let img=this.live.imgs[this.currentPPt]
-        this.live.scenes[this.currentPPt].ppt=img
+        //let img=this.live.imgs[this.currentPPt]
+        //this.live.scenes[this.currentPPt].ppt=img
         let time=new Date().getTime()-this.startTime
         this.sceneOne=this.live.scenes[this.currentPPt]
         let scene1 = {'scene':this.live.scenes[this.currentPPt],'uuid':this.roomId,'role':'zhubo'}
@@ -490,20 +631,21 @@ class Draw {
 
         //let sceneOne=JSON.stringify(this.live.scenes[this.currentPPt])
         //this.ws.emit('liveClass',this.live.scenes[this.currentPPt])
-        this.live.qie.push({'time':time,'ppt':this.currentPPt})//time:200,ppt:4
-
+        if(this.live.qie.length===0||this.currentPPt!=this.live.qie[this.live.qie.length-1].ppt){
+            this.live.qie.push({'time':time,'ppt':this.currentPPt})//time:200,ppt:4
+        }
         this.init()
         this.line()
     }
 
 
-    liveEnd(ppt){
+    liveSave(ppt){
         let time=new Date().getTime()-this.startTime
 
         this.live.qie.push({'time':time,'ppt':ppt||-1})
         this.live['time']=time
         let data={'role':'zhubo','uuid':this.roomId,'live':this.live}
-        this.ws.emit('liveEnd',data)
+        this.ws.emit('liveSave',data)
     }
 
 
