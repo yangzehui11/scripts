@@ -8,13 +8,20 @@
 <body>
 <div id="baiban">
 </div>
-<input id="a" type="button">
+<input id="a" type="button" value="暂停">
 <script src="js/socket.js"></script>
 <script>
     let d=new Draw()
     d.playback(8,'http://localhost:7001','baiban')
     document.getElementById('a').onclick=function () {
-        d.stop()
+        if(this.value=='暂停'){
+            d.stop()
+            this.value='继续播放'
+        }else if(this.value=='继续播放'){
+            d.play()
+            this.value='暂停'
+        }
+
     }
 
 </script>

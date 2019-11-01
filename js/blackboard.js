@@ -11,10 +11,11 @@ class Draw {
         //this.scenes['imgs']=[]//所有ppt
         this.startTime=null;//直播的开始时间
         this.operate='line';//进行的是什么操作，line是画线，rubber是擦除，后续还有text敲汉字
-        this.arr=[]//回放功能的定时器存放在
         this.roomId;
         this.classFlag=false;
         this.huifangInterval;//回放时控制场景的定时器
+        this.currentTime=0;//回放时的开始时间，从第ctime秒开始回放
+        this.arr=[];//回放时控制某一场景所有未播放笔迹的定时器
     }
     //创建房间
     createRoom(roomId,server,el){
@@ -263,10 +264,6 @@ class Draw {
             //alert('下课')
         })
 
-        /*window.onbeforeunload=()=>{
-            alert(111)
-            this.inRoom(this.roomId)
-        }*/
         load()
         window.onresize=load
         window.onload=load
@@ -309,46 +306,62 @@ class Draw {
                 alert('该课程没有回放')
             }else if(data!=null){
                 this.live=data
-                qieScene(this.live,0,this.canvas,this.ctx,this.huifangInterval)
+                this.play()
             }
         })
-        //场景切换
-        function qieScene(live,ctime,canvas,ctx,huifangInterval) {
-            let huifangStartTime=new Date().getTime()-ctime
-            let newQie = []//存放可以发送给观众的场景
-            let flag=false//判断是否往newQie中push了
-            //let arr=[] //存放场景播放方法里的定时器
-            clearInterval(huifangInterval)
-            huifangInterval=setInterval(()=> {
-                let currentTime=new Date().getTime()-huifangStartTime
-                //let flag=false//监视是否往newQie中push
-                for (let i = newQie.length; i <live['qie'].length ; i++) {
-                    if(live.qie[i]['time']<currentTime&&i>=newQie.length){
-                        newQie.push(live.qie[i])
-                        flag=true
-                    }
-                    if(live.qie[i]['time']>=currentTime){
-                        break;//如果录制时间大于当前时间。其后面的也必要执行了
-                    }
-                }
-                if(newQie.length==live.qie.length){
-                    clearInterval(huifangInterval)
-                    return
-                }
-                //发送的是newQie数组中时间最大的场景,也就是最后一个
-                if(flag){
-                    let lastScene = newQie[newQie.length-1]
-                    let ppt = lastScene['ppt']
-                        //找出了当前时间的场景并给播放方法
-                        playScene(live.scenes[ppt],canvas,ctx,huifangStartTime)
-                    flag=false
-                }
+        load()
+        window.onresize=load
+        window.onload=load
+        function load () {
+            let h=document.documentElement.clientHeight
+            let w=document.documentElement.clientWidth
+            if(h<=w){
+                canvas.style.width=parseInt(h*(4/3))+'px';
+                canvas.style.height=parseInt(h)+'px';
+            }else if(h>w){
+                canvas.style.width=parseInt(w)+'px';
+                canvas.style.height=parseInt(w*(3/4))+'px';
+            }
 
-            },1000)
         }
-        let arr=[]
+    }
+    //播放回放数据
+    play(){
+        let huifangStartTime=new Date().getTime()-this.currentTime
+        let newQie = []//存放可以发送给观众的场景
+        let flag=false//判断是否往newQie中push了
+        //let arr=[] //存放场景播放方法里的定时器
+        clearInterval(this.huifangInterval)
+        this.huifangInterval=setInterval(()=> {
+            this.currentTime=new Date().getTime()-huifangStartTime
+            //let flag=false//监视是否往newQie中push
+            for (let i = newQie.length; i <this.live['qie'].length ; i++) {
+                if(this.live.qie[i]['time']<this.currentTime&&i>=newQie.length){
+                    newQie.push(this.live.qie[i])
+                    flag=true
+                }
+                if(this.live.qie[i]['time']>=this.currentTime){
+                    break;//如果录制时间大于当前时间。其后面的也必要执行了
+                }
+            }
+            if(newQie.length==this.live.qie.length){
+                clearInterval(this.huifangInterval)
+                return
+            }
+            //发送的是newQie数组中时间最大的场景,也就是最后一个
+            if(flag){
+                let lastScene = newQie[newQie.length-1]
+                let ppt = lastScene['ppt']
+                //找出了当前时间的场景并给播放方法
+                playScene(this.live.scenes[ppt],this.canvas,this.ctx,this.currentTime,this.arr)
+                flag=false
+            }
+
+        },1000)
+
+
         //场景播放
-        function playScene(scene,canvas,ctx,huifangStartTime) {
+        function playScene(scene,canvas,ctx,currentTime,arr) {
             //清理定时器
             for (let i = 0; i < arr.length; i++) {
                 console.log(arr)
@@ -357,7 +370,6 @@ class Draw {
             //清屏
             ctx.clearRect(0, 0, 10000, 10000)
 
-            let currentTime = new Date().getTime() - huifangStartTime
             canvas.style.backgroundImage = 'url("' + scene.ppt + '")'
             canvas.style.backgroundSize = 'cover'
 
@@ -439,29 +451,15 @@ class Draw {
                 ctx.clearRect(cc[2],cc[3],cc[4],cc[5])
             }
         }
-
-        load()
-        window.onresize=load
-        window.onload=load
-        function load () {
-            let h=document.documentElement.clientHeight
-            let w=document.documentElement.clientWidth
-            if(h<=w){
-                canvas.style.width=parseInt(h*(4/3))+'px';
-                canvas.style.height=parseInt(h)+'px';
-            }else if(h>w){
-                canvas.style.width=parseInt(w)+'px';
-                canvas.style.height=parseInt(w*(3/4))+'px';
-            }
-
-        }
     }
 
     //回放时暂停
     stop(){
-        console.log('停止1')
         clearInterval(this.huifangInterval)
-        console.log('停止1')
+        //清理定时器
+        for (let i = 0; i < this.arr.length; i++) {
+            clearTimeout(this.arr[i])
+        }
     }
     line(lineSize) {
 
